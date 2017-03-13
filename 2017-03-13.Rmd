@@ -1,0 +1,134 @@
+---
+title: "STA221"
+author: "Neil Montgomery"
+date: "Last edited: `r format(Sys.time(), '%Y-%m-%d %H:%M')`"
+output: 
+  beamer_presentation:
+    keep_tex: TRUE
+    incremental: TRUE
+#    df_print: tibble
+    fig_caption: FALSE
+classoption: aspectratio=169
+header-includes:
+- \newcommand{\ve}{\varepsilon}
+- \newcommand{\dbar}[1]{\overline{\overline{#1}}}
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE,
+                      dev='pdf', fig.width=5, fig.asp=0.618, fig.align='center')
+options(tibble.width=70, scipen = 999, tibble.print_min=5, show.signif.stars = FALSE)
+library(tidyverse)
+library(readxl)
+```
+
+
+
+## recap - pairwise comparisons
+
+
+\pause If you plan to make $m$ pairwise comparisons after "rejecting" the overall $F$ test, you can report the following confidence intervals:
+
+$$(\overline{y}_i - \overline{y}_j) \pm t_{N-k, \alpha/2m} \sqrt{MSE}\sqrt{\frac{1}{n_i} + \frac{1}{n_j}}$$
+
+where the usual $\alpha/2$ (which itself is usually 0.025 for a 95\% interval) has been subjected to a Bonferroni correction to maintain the desired experimentwise error rate.
+
+\pause The Bonferroni correction can also be used if you see an interesting pair or groups to compare only after the fact.
+
+## post-hoc comparison trick
+
+Dangerous territory: perform a comparison \textit{after looking at the data}.
+
+\pause Trick: use Bonferroni's correction \textit{assuming you were going to look at all the comparisons in advance.}
+
+\pause With $k$ groups there will be $k(k-1)/2$ such comparisons.
+
+\pause Example using question 25.19 "Fertilizers". There are $k=10$ fertilizers being compared with $n=10$ mung bean sprouts each. After a week, the bean heights are measured.
+
+## "Fertilizers" example
+
+```{r}
+fert <- read.csv("Fertilizers.csv")
+fert %>% 
+  ggplot(aes(x=Fertilizer, y=Heights)) + geom_boxplot()
+```
+
+## "Fertilizers" example
+
+`E` and `F` look interesting. I think I'll test that pairwise difference at the end. 
+
+\pause I need to run the ANOVA and verify the assumptions:
+
+```{r}
+fert_fit <- fert %>% aov(Heights ~ Fertilizer, data=.)
+anova(fert_fit)
+library(car)
+fert %>% leveneTest(Heights ~ Fertilizer, data=.)
+```
+
+## OK, so then let's look at the "Cereals" data from Q25.21
+
+```{r}
+cereal <- read.delim("Ch25_Cereals.txt")
+cereal$SHELF <- factor(cereal$SHELF)
+cereal %>% 
+  ggplot(aes(x=SHELF, y=PROTEIN)) + geom_jitter(width = 0.1, height = 0.001)
+```
+
+## "Cereals redux"
+
+I'd also like to see if there is a difference between shelves 2 and 3.
+
+\pause Start with the analysis and assumption verification:
+
+```{r}
+cereal_fit <- cereal %>% aov(PROTEIN ~ SHELF, data=.)
+summary(cereal_fit)
+
+cereal %>% leveneTest(PROTEIN ~ SHELF, data=.)
+```
+
+## "Cereals redux"
+
+```{r}
+library(broom)
+augment(cereal_fit) %>% 
+  ggplot(aes(sample=.resid)) + geom_qq()
+```
+
+## comparing shelves 2 and 3
+
+There are 3 \textit{possible} comparisons, so a Bonferroni correction with $m=3$ will be needed, even though I'm only actually doing one comparison.
+
+\pause Computer says: $t_{74, 0.05/6} = `r -qt(0.05/6, 74)`$
+
+```{r}
+summary(cereal_fit)
+cereal %>% group_by(SHELF) %>% summarize(n=n(), mean=mean(PROTEIN))
+```
+
+## "All pairwise comparisons"
+
+Sometimes it is valuable to simply summarize all possible pairwise comparisons to determine which groups are the same and which are different. 
+
+\pause Here is an efficient algorithm for performing this task for cases when the group sample sizes are all the same (equal to some $n$). Let's look at the Yeast example again.
+
+```{r}
+yeast <- read_csv("Ch28_Activating_yeast.csv")
+yeast$Recipe <- factor(yeast$Recipe)
+yeast %>% aov(`Activation Times` ~ Recipe, data = .) %>% summary()
+yeast %>% group_by(Recipe) %>% summarize(n=n(), mean=mean(`Activation Times`)) %>% arrange(mean)
+```
+
+## "all pairwise" with Yeast
+
+\pause Computer says: $t_{74, 0.05/12} = `r (t_bon <- -qt(0.05/12, 12))`$
+
+```{r}
+yeast %>% group_by(Recipe) %>% summarize(n=n(), mean=mean(`Activation Times`)) %>% arrange(mean)
+
+lsd <- -qt(0.05/12, 12)*sqrt(4761)*sqrt(1/4+1/4)
+```
+
+\pause The "margin of error" is `r lsd`.
+
